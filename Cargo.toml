@@ -1,0 +1,8 @@
+[workspace]
+resolver = "3"
+members = [
+	"cli",
+]
+
+[workspace.lints.clippy]
+while_let_on_iterator = "allow"
