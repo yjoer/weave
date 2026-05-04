@@ -1,0 +1,9 @@
+fn_call_width = 100
+fn_params_layout = "Compressed"
+format_strings = false
+hard_tabs = true
+imports_layout = "HorizontalVertical"
+imports_granularity = "Module"
+reorder_impl_items = true
+group_imports = "StdExternalCrate"
+wrap_comments = true
