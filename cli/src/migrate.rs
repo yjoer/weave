@@ -63,22 +63,7 @@ impl<'a> Lexer<'a> {
 					}
 					'-' if self._peek() == Some('-') => {
 						self.chars.next();
-
-						match self._cell_marker() {
-							Some(marker) => return Ok(marker),
-							None => {
-								// consume the rest of the line if the comment starts with
-								// non-whitespace characters
-								while let Some(c) = self.chars.next() {
-									if c == '\n' {
-										return Ok(TokenKind::LineComment);
-									}
-								}
-
-								// end of file reached before newline
-								return Ok(TokenKind::LineComment);
-							}
-						}
+						return Ok(self._cell_marker());
 					}
 					_ => {
 						if let Some(content) = self._cell_content() {
@@ -146,25 +131,26 @@ impl<'a> Lexer<'a> {
 		}
 	}
 
-	fn _cell_marker(&mut self) -> Option<TokenKind> {
-		while let Some(c) = self.chars.next() {
+	fn _cell_marker(&mut self) -> TokenKind {
+		let mut empty = self._peek() == Some('\n');
+		let mut invalid = false;
+		while !empty && let Some(c) = self.chars.next() {
 			// "--" and "%%" can be separated by whitespaces
 			// not a cell marker if there are non-whitespace characters before "%%"
 			match c {
-				'%' => {
-					if self._peek() == Some('%') {
-						self.chars.next();
-						self.state = LexerState::CellMarker;
-						return Some(TokenKind::CellMarker);
-					}
+				'%' if !invalid && self._peek() == Some('%') => {
+					self.chars.next();
+					self.state = LexerState::CellMarker;
+					return TokenKind::CellMarker;
 				}
-				'\n' => return Some(TokenKind::LineComment),
 				c if c.is_whitespace() => {}
-				_ => break,
+				_ => invalid = true,
 			}
+
+			empty = self._peek() == Some('\n');
 		}
 
-		None
+		TokenKind::LineComment
 	}
 
 	fn _cell_type(&mut self) -> Result<TokenKind, anyhow::Error> {
@@ -398,8 +384,9 @@ dialect: postgres
 	fn test_line_comments() {
 		let comments = vec![
 			("--%", 0, 3),
-			("--  \t% \n abc", 0, 8),
-			("--  \tabc %% \n xyz", 0, 13),
+			("--\n", 0, 2),
+			("--  \t% \n abc", 0, 7),
+			("--  \tabc %% \n xyz", 0, 12),
 		];
 
 		for comment in comments {
@@ -597,10 +584,10 @@ select 2 - 1; /* subtraction */
 
 		let tokens = vec![
 			(TokenKind::CellMarker, 0, 5),
-			(TokenKind::LineComment, 5, 15),
-			(TokenKind::CellContent, 15, 43),
-			(TokenKind::LineComment, 43, 55),
-			(TokenKind::CellContent, 55, 86),
+			(TokenKind::LineComment, 5, 14),
+			(TokenKind::CellContent, 14, 43),
+			(TokenKind::LineComment, 43, 54),
+			(TokenKind::CellContent, 54, 86),
 			//
 			(TokenKind::CellMarker, 86, 91),
 			(TokenKind::BlockComment, 91, 104),
@@ -610,8 +597,8 @@ select 2 - 1; /* subtraction */
 			//
 			(TokenKind::CellMarker, 178, 183),
 			(TokenKind::CellContent, 183, 198),
-			(TokenKind::LineComment, 198, 210),
-			(TokenKind::CellContent, 210, 211),
+			(TokenKind::LineComment, 198, 209),
+			(TokenKind::CellContent, 209, 211),
 			//
 			(TokenKind::CellMarker, 211, 216),
 			(TokenKind::CellContent, 216, 231),
