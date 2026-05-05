@@ -26,10 +26,12 @@ pub struct Token {
 
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum TokenKind {
+	Frontmatter,
 	CellMarker,
 	CellType,
 	CellConfig,
 	CellContent,
+	BlockComment,
 	LineComment,
 	Eof,
 }
@@ -55,6 +57,10 @@ impl<'a> Lexer<'a> {
 		while let Some(c) = self.chars.next() {
 			match self.state {
 				LexerState::Default => match c {
+					'/' if self._peek() == Some('*') => {
+						self.chars.next();
+						return Ok(self._frontmatter());
+					}
 					'-' if self._peek() == Some('-') => {
 						self.chars.next();
 
@@ -101,6 +107,49 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
+	fn _frontmatter(&mut self) -> TokenKind {
+		let mut count = 0;
+		let mut invalid = false;
+		while let Some(c) = self.chars.next() {
+			// not a frontmatter if there are non-whitespace characters before the first
+			// "---" or after the last "---"
+			match c {
+				'-' => {
+					if self._peek() == Some('-') {
+						self.chars.next();
+
+						if self._peek() == Some('-') {
+							self.chars.next();
+							count += 1;
+						} else if count == 0 || count == 2 {
+							invalid = true;
+						}
+					} else if count == 0 || count == 2 {
+						invalid = true;
+					}
+				}
+				'*' => {
+					if self._peek() == Some('/') {
+						self.chars.next();
+						break;
+					}
+				}
+				c if c.is_whitespace() => {}
+				_ => {
+					if count == 0 || count == 2 {
+						invalid = true;
+					}
+				}
+			}
+		}
+
+		if count == 2 && !invalid {
+			TokenKind::Frontmatter
+		} else {
+			TokenKind::BlockComment
+		}
+	}
+
 	fn _cell_marker(&mut self) -> Option<TokenKind> {
 		while let Some(c) = self.chars.next() {
 			// "--" and "%%" can be separated by whitespaces
@@ -193,6 +242,136 @@ impl<'a> Lexer<'a> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn test_frontmatters() {
+		let fm = "
+/*
+---
+dialect: postgres
+---
+*/
+		"
+		.trim();
+		let mut lexer = Lexer::new(&fm);
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::Frontmatter);
+		assert_eq!(t.start, 0);
+		assert_eq!(t.end, 31);
+
+		let fm = "
+/*
+---
+name: my-app--test
+dialect: postgres
+---
+*/
+		"
+		.trim();
+		let mut lexer = Lexer::new(&fm);
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::Frontmatter);
+		assert_eq!(t.start, 0);
+		assert_eq!(t.end, 50);
+
+		let fm = "
+/*
+-
+---
+dialect: postgres
+---
+*/
+		"
+		.trim();
+		let mut lexer = Lexer::new(&fm);
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::BlockComment);
+		assert_eq!(t.start, 0);
+		assert_eq!(t.end, 33);
+
+		let fm = "
+/*
+--
+---
+dialect: postgres
+---
+*/
+		"
+		.trim();
+		let mut lexer = Lexer::new(&fm);
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::BlockComment);
+		assert_eq!(t.start, 0);
+		assert_eq!(t.end, 34);
+
+		let fm = "
+/*
+---
+dialect: postgres
+---
+-
+*/
+		"
+		.trim();
+		let mut lexer = Lexer::new(&fm);
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::BlockComment);
+		assert_eq!(t.start, 0);
+		assert_eq!(t.end, 33);
+
+		let fm = "
+/*
+---
+dialect: postgres
+---
+--
+*/
+		"
+		.trim();
+		let mut lexer = Lexer::new(&fm);
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::BlockComment);
+		assert_eq!(t.start, 0);
+		assert_eq!(t.end, 34);
+
+		let fm = "
+/*
+2**2
+---
+dialect: postgres
+---
+*/
+		"
+		.trim();
+		let mut lexer = Lexer::new(&fm);
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::BlockComment);
+		assert_eq!(t.start, 0);
+		assert_eq!(t.end, 36);
+
+		let fm = "
+/*
+---
+dialect: postgres
+---
+2**2
+*/
+		"
+		.trim();
+		let mut lexer = Lexer::new(&fm);
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::BlockComment);
+		assert_eq!(t.start, 0);
+		assert_eq!(t.end, 36);
+	}
 
 	#[test]
 	fn test_cell_markers() {
@@ -346,7 +525,7 @@ select columns from products;
 select columns from orders;
 
 -- %% [python] {\"key\": \"value\"}
-select columns from returns;
+select 2 / 1;
 
 -- %% {\"key\": \"value\"} [python]
 select 2 - 1;
@@ -369,12 +548,12 @@ select 2 - 1;
 			(TokenKind::CellMarker, 132, 137),
 			(TokenKind::CellType, 137, 146),
 			(TokenKind::CellConfig, 146, 163),
-			(TokenKind::CellContent, 163, 194),
+			(TokenKind::CellContent, 163, 179),
 			//
-			(TokenKind::CellMarker, 194, 199),
-			(TokenKind::CellConfig, 199, 216),
-			(TokenKind::CellType, 216, 225),
-			(TokenKind::CellContent, 225, 239),
+			(TokenKind::CellMarker, 179, 184),
+			(TokenKind::CellConfig, 184, 201),
+			(TokenKind::CellType, 201, 210),
+			(TokenKind::CellContent, 210, 224),
 		];
 
 		for tk in tokens {
