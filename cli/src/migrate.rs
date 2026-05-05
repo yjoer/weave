@@ -234,7 +234,7 @@ mod tests {
 		let fm = "
 /*
 ---
-dialect: postgres
+dialect = \"postgres\"
 ---
 */
 		"
@@ -244,13 +244,13 @@ dialect: postgres
 		let t = lexer.read_next_token().unwrap();
 		assert_eq!(t.kind, TokenKind::Frontmatter);
 		assert_eq!(t.start, 0);
-		assert_eq!(t.end, 31);
+		assert_eq!(t.end, 34);
 
 		let fm = "
 /*
 ---
-name: my-app--test
-dialect: postgres
+name = \"my-app--test\"
+dialect = \"postgres\"
 ---
 */
 		"
@@ -260,77 +260,13 @@ dialect: postgres
 		let t = lexer.read_next_token().unwrap();
 		assert_eq!(t.kind, TokenKind::Frontmatter);
 		assert_eq!(t.start, 0);
-		assert_eq!(t.end, 50);
+		assert_eq!(t.end, 56);
 
 		let fm = "
 /*
 -
 ---
-dialect: postgres
----
-*/
-		"
-		.trim();
-		let mut lexer = Lexer::new(&fm);
-
-		let t = lexer.read_next_token().unwrap();
-		assert_eq!(t.kind, TokenKind::BlockComment);
-		assert_eq!(t.start, 0);
-		assert_eq!(t.end, 33);
-
-		let fm = "
-/*
---
----
-dialect: postgres
----
-*/
-		"
-		.trim();
-		let mut lexer = Lexer::new(&fm);
-
-		let t = lexer.read_next_token().unwrap();
-		assert_eq!(t.kind, TokenKind::BlockComment);
-		assert_eq!(t.start, 0);
-		assert_eq!(t.end, 34);
-
-		let fm = "
-/*
----
-dialect: postgres
----
--
-*/
-		"
-		.trim();
-		let mut lexer = Lexer::new(&fm);
-
-		let t = lexer.read_next_token().unwrap();
-		assert_eq!(t.kind, TokenKind::BlockComment);
-		assert_eq!(t.start, 0);
-		assert_eq!(t.end, 33);
-
-		let fm = "
-/*
----
-dialect: postgres
----
---
-*/
-		"
-		.trim();
-		let mut lexer = Lexer::new(&fm);
-
-		let t = lexer.read_next_token().unwrap();
-		assert_eq!(t.kind, TokenKind::BlockComment);
-		assert_eq!(t.start, 0);
-		assert_eq!(t.end, 34);
-
-		let fm = "
-/*
-2**2
----
-dialect: postgres
+dialect = \"postgres\"
 ---
 */
 		"
@@ -344,8 +280,72 @@ dialect: postgres
 
 		let fm = "
 /*
+--
 ---
-dialect: postgres
+dialect = \"postgres\"
+---
+*/
+		"
+		.trim();
+		let mut lexer = Lexer::new(&fm);
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::BlockComment);
+		assert_eq!(t.start, 0);
+		assert_eq!(t.end, 37);
+
+		let fm = "
+/*
+---
+dialect = \"postgres\"
+---
+-
+*/
+		"
+		.trim();
+		let mut lexer = Lexer::new(&fm);
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::BlockComment);
+		assert_eq!(t.start, 0);
+		assert_eq!(t.end, 36);
+
+		let fm = "
+/*
+---
+dialect = \"postgres\"
+---
+--
+*/
+		"
+		.trim();
+		let mut lexer = Lexer::new(&fm);
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::BlockComment);
+		assert_eq!(t.start, 0);
+		assert_eq!(t.end, 37);
+
+		let fm = "
+/*
+2**2
+---
+dialect = \"postgres\"
+---
+*/
+		"
+		.trim();
+		let mut lexer = Lexer::new(&fm);
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::BlockComment);
+		assert_eq!(t.start, 0);
+		assert_eq!(t.end, 39);
+
+		let fm = "
+/*
+---
+dialect = \"postgres\"
 ---
 2**2
 */
@@ -356,7 +356,7 @@ dialect: postgres
 		let t = lexer.read_next_token().unwrap();
 		assert_eq!(t.kind, TokenKind::BlockComment);
 		assert_eq!(t.start, 0);
-		assert_eq!(t.end, 36);
+		assert_eq!(t.end, 39);
 	}
 
 	#[test]
@@ -502,6 +502,12 @@ dialect: postgres
 	#[test]
 	fn test_source() {
 		let source = "
+/*
+---
+dialect = \"postgres\"
+---
+*/
+
 -- %%
 select columns from users;
 
@@ -521,26 +527,29 @@ select 2 - 1;
 		let mut lexer = Lexer::new(&source);
 
 		let tokens = vec![
-			(TokenKind::CellMarker, 0, 5),
-			(TokenKind::CellContent, 5, 34),
+			(TokenKind::Frontmatter, 0, 34),
+			(TokenKind::CellContent, 34, 36),
 			//
-			(TokenKind::CellMarker, 34, 39),
-			(TokenKind::CellType, 39, 48),
-			(TokenKind::CellContent, 48, 80),
+			(TokenKind::CellMarker, 36, 41),
+			(TokenKind::CellContent, 41, 70),
 			//
-			(TokenKind::CellMarker, 80, 85),
-			(TokenKind::CellConfig, 85, 102),
-			(TokenKind::CellContent, 102, 132),
+			(TokenKind::CellMarker, 70, 75),
+			(TokenKind::CellType, 75, 84),
+			(TokenKind::CellContent, 84, 116),
 			//
-			(TokenKind::CellMarker, 132, 137),
-			(TokenKind::CellType, 137, 146),
-			(TokenKind::CellConfig, 146, 163),
-			(TokenKind::CellContent, 163, 179),
+			(TokenKind::CellMarker, 116, 121),
+			(TokenKind::CellConfig, 121, 138),
+			(TokenKind::CellContent, 138, 168),
 			//
-			(TokenKind::CellMarker, 179, 184),
-			(TokenKind::CellConfig, 184, 201),
-			(TokenKind::CellType, 201, 210),
-			(TokenKind::CellContent, 210, 224),
+			(TokenKind::CellMarker, 168, 173),
+			(TokenKind::CellType, 173, 182),
+			(TokenKind::CellConfig, 182, 199),
+			(TokenKind::CellContent, 199, 215),
+			//
+			(TokenKind::CellMarker, 215, 220),
+			(TokenKind::CellConfig, 220, 237),
+			(TokenKind::CellType, 237, 246),
+			(TokenKind::CellContent, 246, 260),
 		];
 
 		for tk in tokens {
@@ -557,6 +566,12 @@ select 2 - 1;
 	#[test]
 	fn test_source_interleaved_comments() {
 		let source = "
+/*
+---
+dialect = \"postgres\"
+---
+*/
+
 -- %%
 -- users
 select columns from users;
@@ -581,26 +596,29 @@ select 2 - 1; /* subtraction */
 		let mut lexer = Lexer::new(&source);
 
 		let tokens = vec![
-			(TokenKind::CellMarker, 0, 5),
-			(TokenKind::LineComment, 5, 14),
-			(TokenKind::CellContent, 14, 43),
-			(TokenKind::LineComment, 43, 54),
-			(TokenKind::CellContent, 54, 86),
+			(TokenKind::Frontmatter, 0, 34),
+			(TokenKind::CellContent, 34, 36),
 			//
-			(TokenKind::CellMarker, 86, 91),
-			(TokenKind::BlockComment, 91, 104),
-			(TokenKind::CellContent, 104, 134),
-			(TokenKind::BlockComment, 134, 147),
-			(TokenKind::CellContent, 147, 178),
+			(TokenKind::CellMarker, 36, 41),
+			(TokenKind::LineComment, 41, 50),
+			(TokenKind::CellContent, 50, 79),
+			(TokenKind::LineComment, 79, 90),
+			(TokenKind::CellContent, 90, 122),
 			//
-			(TokenKind::CellMarker, 178, 183),
-			(TokenKind::CellContent, 183, 198),
-			(TokenKind::LineComment, 198, 209),
-			(TokenKind::CellContent, 209, 211),
+			(TokenKind::CellMarker, 122, 127),
+			(TokenKind::BlockComment, 127, 140),
+			(TokenKind::CellContent, 140, 170),
+			(TokenKind::BlockComment, 170, 183),
+			(TokenKind::CellContent, 183, 214),
 			//
-			(TokenKind::CellMarker, 211, 216),
-			(TokenKind::CellContent, 216, 231),
-			(TokenKind::BlockComment, 231, 248),
+			(TokenKind::CellMarker, 214, 219),
+			(TokenKind::CellContent, 219, 234),
+			(TokenKind::LineComment, 234, 245),
+			(TokenKind::CellContent, 245, 247),
+			//
+			(TokenKind::CellMarker, 247, 252),
+			(TokenKind::CellContent, 252, 267),
+			(TokenKind::BlockComment, 267, 284),
 		];
 
 		for tk in tokens {
