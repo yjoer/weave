@@ -114,16 +114,12 @@ impl<'a> Lexer<'a> {
 			// not a frontmatter if there are non-whitespace characters before the first
 			// "---" or after the last "---"
 			match c {
-				'-' => {
+				'-' if self._peek() == Some('-') => {
+					self.chars.next();
+
 					if self._peek() == Some('-') {
 						self.chars.next();
-
-						if self._peek() == Some('-') {
-							self.chars.next();
-							count += 1;
-						} else if count == 0 || count == 2 {
-							invalid = true;
-						}
+						count += 1;
 					} else if count == 0 || count == 2 {
 						invalid = true;
 					}
@@ -224,6 +220,10 @@ impl<'a> Lexer<'a> {
 		}
 
 		if first == Some('-') && second == Some('-') {
+			return Some(TokenKind::CellContent);
+		}
+
+		if first == Some('/') && second == Some('*') {
 			return Some(TokenKind::CellContent);
 		}
 
@@ -565,5 +565,67 @@ select 2 - 1;
 
 		let t = lexer.read_next_token().unwrap();
 		assert_eq!(t.kind, TokenKind::Eof);
+	}
+
+	#[test]
+	fn test_source_interleaved_comments() {
+		let source = "
+-- %%
+-- users
+select columns from users;
+
+-- products
+select columns from products;
+
+-- %%
+/* orders */
+select columns from orders;
+
+/* returns */
+select columns from returns;
+
+-- %%
+select 2 / 1; -- division
+
+-- %%
+select 2 - 1; /* subtraction */
+
+-- %%
+		"
+		.trim();
+		let mut lexer = Lexer::new(&source);
+
+		let tokens = vec![
+			(TokenKind::CellMarker, 0, 5),
+			(TokenKind::LineComment, 5, 15),
+			(TokenKind::CellContent, 15, 43),
+			(TokenKind::LineComment, 43, 55),
+			(TokenKind::CellContent, 55, 86),
+			//
+			(TokenKind::CellMarker, 86, 91),
+			(TokenKind::BlockComment, 91, 104),
+			(TokenKind::CellContent, 104, 134),
+			(TokenKind::BlockComment, 134, 147),
+			(TokenKind::CellContent, 147, 178),
+			//
+			(TokenKind::CellMarker, 178, 183),
+			(TokenKind::CellContent, 183, 198),
+			(TokenKind::LineComment, 198, 210),
+			(TokenKind::CellContent, 210, 211),
+			//
+			(TokenKind::CellMarker, 211, 216),
+			(TokenKind::CellContent, 216, 231),
+			(TokenKind::BlockComment, 231, 248),
+			(TokenKind::CellContent, 248, 250),
+			//
+			(TokenKind::CellMarker, 250, 255),
+		];
+
+		for tk in tokens {
+			let t = lexer.read_next_token().unwrap();
+			assert_eq!(t.kind, tk.0);
+			assert_eq!(t.start, tk.1);
+			assert_eq!(t.end, tk.2);
+		}
 	}
 }
