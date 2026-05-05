@@ -20,7 +20,7 @@ enum LexerState {
 #[cfg_attr(test, derive(Debug))]
 pub struct Token {
 	pub kind: TokenKind,
-	pub start: usize,
+	pub start: usize, // [start, end)
 	pub end: usize,
 }
 
@@ -576,8 +576,6 @@ select 2 / 1; -- division
 
 -- %%
 select 2 - 1; /* subtraction */
-
--- %%
 		"
 		.trim();
 		let mut lexer = Lexer::new(&source);
@@ -603,9 +601,6 @@ select 2 - 1; /* subtraction */
 			(TokenKind::CellMarker, 211, 216),
 			(TokenKind::CellContent, 216, 231),
 			(TokenKind::BlockComment, 231, 248),
-			(TokenKind::CellContent, 248, 250),
-			//
-			(TokenKind::CellMarker, 250, 255),
 		];
 
 		for tk in tokens {
@@ -614,5 +609,8 @@ select 2 - 1; /* subtraction */
 			assert_eq!(t.start, tk.1);
 			assert_eq!(t.end, tk.2);
 		}
+
+		let t = lexer.read_next_token().unwrap();
+		assert_eq!(t.kind, TokenKind::Eof);
 	}
 }
