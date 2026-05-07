@@ -99,21 +99,14 @@ impl<'a> Lexer<'a> {
 			// not a frontmatter if there are non-whitespace characters before the first
 			// "---" or after the last "---"
 			match c {
-				'-' if self._peek() == Some('-') => {
+				'-' if self._peek() == Some('-') && self._peek_next() == Some('-') => {
 					self.chars.next();
-
-					if self._peek() == Some('-') {
-						self.chars.next();
-						count += 1;
-					} else if count == 0 || count == 2 {
-						invalid = true;
-					}
+					self.chars.next();
+					count += 1;
 				}
-				'*' => {
-					if self._peek() == Some('/') {
-						self.chars.next();
-						break;
-					}
+				'*' if self._peek() == Some('/') => {
+					self.chars.next();
+					break;
 				}
 				c if c.is_whitespace() => {}
 				_ => {
@@ -218,6 +211,10 @@ impl<'a> Lexer<'a> {
 
 	fn _peek(&self) -> Option<char> {
 		self.chars.clone().next()
+	}
+
+	fn _peek_next(&self) -> Option<char> {
+		self.chars.clone().nth(1)
 	}
 
 	fn _offset(&self) -> usize {
